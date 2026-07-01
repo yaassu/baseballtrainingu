@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>⚾ グングンやきゅうノート 〜きみだけの育成カード〜</title>
+<style>
+/* =========================================================================
+   少年野球 自主練記録アプリ「じしゅ練ノート」 — 単一HTML
+   ・選手はカードをタップするだけでログイン（小学生向け）
+   ・素振り/ティー/守備/ピッチング/筋トレ/柔軟を + ボタンで記録、自動保存
+   ・練習がパワプロ風パラメータに育ち、ランク S〜G と育成カードで見える化
+   ・レベル / 連続日数 / バッジ でやりがい
+   ・管理者画面で全選手を見合える（ランキング・詳細・CSV出力）
+   ・既定はFirebase(pool-record)でクラウド共有、未接続時はlocalStorage
+   ========================================================================= */
+:root{
+  --bg:#0d1b2a; --panel:#16263b; --panel2:#1d3350;
+  --line:#2b466b; --ink:#eaf2ff; --sub:#9fb6d6; --acc:#ffd23f; --acc2:#36c5f0;
+  --good:#37d67a; --warn:#ff6b6b;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{
+  font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+  background:radial-gradient(120% 80% at 50% -10%,#1c3a5e 0%,var(--bg) 60%);
+  color:var(--ink); min-height:100vh; -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:760px;margin:0 auto;padding:14px 14px 90px}
+h1,h2,h3{margin:0}
+button{font-family:inherit;cursor:pointer;border:none}
+.hidden{display:none!important}
+
+/* ===== ヘッダー ===== */
+.topbar{display:flex;align-items:center;gap:10px;padding:8px 4px 14px}
+.topbar .logo{font-size:22px;font-weight:900;letter-spacing:.5px}
+.topbar .logo small{display:block;font-size:11px;color:var(--sub);font-weight:600;letter-spacing:2px}
+.spacer{flex:1}
+.ibtn{background:var(--panel2);color:var(--ink);border-radius:12px;padding:8px 12px;font-weight:700;font-size:13px;border:1px solid var(--line)}
+.ibtn:active{transform:scale(.96)}
+.badge{font-size:11px;padding:3px 9px;border-radius:999px;background:#33445e;color:var(--sub);font-weight:700}
+.badge.cloud{background:#0e3b2a;color:#7df0b6}
+
+/* ===== ログイン（選手選択） ===== */
+.hero{text-align:center;padding:8px 0 18px}
+.hero h2{font-size:20px}
+.hero p{color:var(--sub);font-size:13px;margin:6px 0 0}
+.playerGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-top:8px}
+.pcard{background:linear-gradient(160deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:18px;padding:14px 10px;text-align:center;color:var(--ink);position:relative;overflow:hidden}
+.pcard:active{transform:scale(.97)}
+.pcard .ava{font-size:40px;line-height:1}
+.pcard .nm{font-weight:800;margin-top:6px;font-size:15px}
+.pcard .lv{font-size:11px;color:var(--acc);font-weight:800;margin-top:3px}
+.pcard.add{display:flex;align-items:center;justify-content:center;flex-direction:column;border-style:dashed;color:var(--sub);min-height:120px}
+.pcard.add .ava{font-size:30px}
+
+/* ===== カード共通 ===== */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:14px}
+.card h3{font-size:15px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.muted{color:var(--sub);font-size:12px}
+
+/* ===== 選手ヘッダーバー ===== */
+.pbar{display:flex;align-items:center;gap:12px;background:linear-gradient(120deg,#24406a,#16263b);border:1px solid var(--line);border-radius:18px;padding:12px 14px;margin-bottom:14px}
+.pbar .ava{font-size:38px}
+.pbar .nm{font-weight:900;font-size:18px}
+.pbar .lvrow{display:flex;align-items:center;gap:8px;margin-top:4px}
+.lvchip{background:var(--acc);color:#3a2a00;font-weight:900;font-size:12px;padding:2px 9px;border-radius:999px}
+.expbar{height:8px;background:#0d1b2a;border-radius:999px;overflow:hidden;width:130px;border:1px solid var(--line)}
+.expbar > i{display:block;height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc))}
+
+/* ===== タブ ===== */
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tab{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--sub);border-radius:14px;padding:11px;font-weight:800;font-size:14px}
+.tab.on{background:var(--acc);color:#3a2a00;border-color:var(--acc)}
+
+/* ===== 入力（練習メニュー） ===== */
+.dateRow{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.dateRow input[type=date]{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:9px 12px;font-size:15px;font-weight:700}
+.act{background:linear-gradient(150deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}
+.act .head{display:flex;align-items:center;gap:10px}
+.act .icon{font-size:30px}
+.act .ttl{font-weight:900;font-size:16px}
+.act .now{margin-left:auto;text-align:right}
+.act .now b{font-size:26px;color:var(--acc)}
+.act .now span{font-size:13px;color:var(--sub);margin-left:3px}
+.steps{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.step{flex:1;min-width:64px;background:var(--good);color:#063a1d;font-weight:900;font-size:16px;border-radius:14px;padding:13px 6px}
+.step:active{transform:scale(.94)}
+.step.minus{background:#34506f;color:#cfe0f5;flex:0 0 56px;min-width:56px}
+.bigcheck{width:100%;margin-top:12px;background:#34506f;color:#cfe0f5;font-weight:900;font-size:18px;border-radius:14px;padding:18px;border:1px solid var(--line)}
+.bigcheck:active{transform:scale(.97)}
+.act.done{border-color:var(--good)}
+.act.done .bigcheck{background:var(--good);color:#063a1d}
+.act .memo{width:100%;margin-top:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px;color:var(--ink);padding:9px 11px;font-size:13px}
+
+/* ===== 育成カード（パワプロ風） ===== */
+.statcard{background:
+  radial-gradient(120% 100% at 80% 0%,#2a4d7a 0%,#16263b 55%);
+  border:1px solid #3a5d8c;border-radius:20px;padding:16px;position:relative;overflow:hidden}
+.statcard:before{content:"";position:absolute;inset:0;background:
+  repeating-linear-gradient(115deg,rgba(255,255,255,.04) 0 2px,transparent 2px 9px);pointer-events:none}
+.sc-top{display:flex;align-items:center;gap:14px;position:relative}
+.sc-top .ava{font-size:54px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.4))}
+.sc-top .nm{font-size:22px;font-weight:900}
+.sc-rank{margin-left:auto;text-align:center}
+.sc-rank .big{font-size:46px;font-weight:900;line-height:1}
+.sc-rank small{display:block;font-size:11px;color:var(--sub);letter-spacing:1px}
+.params{display:grid;grid-template-columns:1fr 1fr;gap:9px 14px;margin-top:16px;position:relative}
+.prow{display:flex;align-items:center;gap:8px}
+.prow .pl{font-size:13px;width:96px;font-weight:700;display:flex;gap:5px;align-items:center}
+.prow .track{flex:1;height:12px;background:#0c1828;border-radius:999px;overflow:hidden;border:1px solid #2c466e}
+.prow .track > i{display:block;height:100%;border-radius:999px}
+.prow .rk{width:26px;text-align:center;font-weight:900;font-size:16px}
+.rk-S{color:#ff3b6b}.rk-A{color:#ff7a45}.rk-B{color:#ffb13f}.rk-C{color:#ffe14d}
+.rk-D{color:#7be06a}.rk-E{color:#4fc3f7}.rk-F{color:#8fa9c9}.rk-G{color:#6b7f9c}
+.bar-S{background:linear-gradient(90deg,#ff3b6b,#ff8fb0)}
+.bar-A{background:linear-gradient(90deg,#ff7a45,#ffb38f)}
+.bar-B{background:linear-gradient(90deg,#ffb13f,#ffd98f)}
+.bar-C{background:linear-gradient(90deg,#ffe14d,#fff3a0)}
+.bar-D{background:linear-gradient(90deg,#7be06a,#b6f0ac)}
+.bar-E{background:linear-gradient(90deg,#4fc3f7,#a5e3fb)}
+.bar-F{background:linear-gradient(90deg,#8fa9c9,#c2d3e8)}
+.bar-G{background:linear-gradient(90deg,#6b7f9c,#9fb0c6)}
+
+.statbig{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.statbig .b{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px;text-align:center}
+.statbig .b b{font-size:22px;color:var(--acc);display:block}
+.statbig .b span{font-size:11px;color:var(--sub)}
+
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.bdg{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700}
+.bdg.off{opacity:.32;filter:grayscale(1)}
+
+.totlist{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.totlist .t{display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+.totlist .t .ic{font-size:20px}
+.totlist .t .v{margin-left:auto;font-weight:900;color:var(--acc)}
+
+/* ヒートマップ（最近4週） */
+.heat{display:flex;flex-direction:column;gap:4px}
+.heat .wk{display:flex;gap:4px}
+.heat .d{flex:1;aspect-ratio:1;border-radius:5px;background:#0e1d30;border:1px solid #1f355a}
+.heat .d.l1{background:#1f6f3f}.heat .d.l2{background:#2c9c57}.heat .d.l3{background:#3fd67a}.heat .d.l4{background:#7bffb0}
+
+/* ===== 管理者 ===== */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:center}
+th{color:var(--sub);font-weight:700;font-size:11px;position:sticky;top:0;background:var(--panel)}
+td.nm{text-align:left;font-weight:800;white-space:nowrap}
+.rank1{color:#ffd23f}.rank2{color:#cfd8e6}.rank3{color:#e0a36a}
+.scroller{overflow:auto;max-height:64vh;border:1px solid var(--line);border-radius:14px}
+.delx{background:#3a1f23;border:1px solid #5a2a30;border-radius:10px;padding:6px 10px;font-size:15px}
+.delx:active{transform:scale(.92)}
+
+/* ===== 子ども画面のおたのしみ演出 ===== */
+#missionBox{margin-bottom:12px}
+.mission{background:linear-gradient(135deg,#23406a,#16263b);border:1px solid var(--line);border-radius:18px;padding:14px}
+.mission h3{font-size:15px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.mrow{display:flex;align-items:center;gap:10px;margin:9px 0}
+.mrow .mic{font-size:22px;width:28px;text-align:center}
+.mrow .mlb{flex:1;font-weight:800;font-size:14px}
+.mrow .mlb small{display:block;color:var(--sub);font-weight:600;font-size:11px;margin-top:1px}
+.mrow .mtrack{width:74px;height:9px;background:#0c1828;border:1px solid #2c466e;border-radius:999px;overflow:hidden}
+.mrow .mtrack>i{display:block;height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));transition:width .4s}
+.mrow .mck{font-size:19px;width:22px;text-align:center}
+.mrow.done .mlb{color:var(--good)}
+.mclear{margin-top:8px;text-align:center;font-weight:900;color:#3a2a00;background:linear-gradient(90deg,var(--acc),#ffe89a);border-radius:12px;padding:9px;animation:pop .4s}
+
+/* タップ演出 */
+@keyframes numpop{0%{transform:scale(1)}40%{transform:scale(1.55)}100%{transform:scale(1)}}
+.numpop{animation:numpop .45s ease;display:inline-block}
+.floater{position:fixed;z-index:55;font-weight:900;font-size:20px;color:var(--acc);pointer-events:none;text-shadow:0 2px 6px rgba(0,0,0,.55);animation:floatup 1s ease forwards}
+@keyframes floatup{0%{opacity:0;transform:translateY(0) scale(.6)}25%{opacity:1;transform:translateY(-12px) scale(1.15)}100%{opacity:0;transform:translateY(-64px) scale(1)}}
+
+/* お祝いオーバーレイ（紙吹雪＆バナー） */
+#celebrate{position:fixed;inset:0;z-index:70;pointer-events:none;overflow:hidden}
+.celebanner{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);text-align:center;animation:celIn .5s cubic-bezier(.2,1.4,.4,1)}
+.celebanner .ttl{font-size:32px;font-weight:900;color:#fff;text-shadow:0 4px 16px rgba(0,0,0,.6)}
+.celebanner .sub{margin-top:8px;font-size:16px;font-weight:800;color:var(--acc);text-shadow:0 2px 8px rgba(0,0,0,.6)}
+@keyframes celIn{0%{transform:translate(-50%,-50%) scale(.3);opacity:0}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.cfetti{position:absolute;top:-30px;will-change:transform;animation:cfall linear forwards}
+@keyframes cfall{0%{transform:translateY(-30px) rotate(0deg);opacity:1}100%{transform:translateY(106vh) rotate(540deg);opacity:.85}}
+
+/* ===== トースト / 演出 ===== */
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(40px);
+  background:var(--acc);color:#3a2a00;font-weight:900;padding:13px 20px;border-radius:999px;
+  box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;transition:.3s;z-index:50;font-size:15px;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@keyframes pop{0%{transform:scale(.6);opacity:0}50%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+.pop{animation:pop .4s}
+
+/* ===== モーダル ===== */
+.modal{position:fixed;inset:0;background:rgba(4,10,20,.7);display:flex;align-items:center;justify-content:center;z-index:60;padding:18px}
+.sheet{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:18px;width:100%;max-width:420px}
+.sheet h3{margin-bottom:12px}
+.sheet input,.sheet select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:11px;font-size:15px;margin-bottom:10px}
+.emojipick{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.emojipick button{font-size:26px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:6px 10px}
+.emojipick button.on{border-color:var(--acc);background:#3a3a16}
+.row2{display:flex;gap:10px}
+.row2 button{flex:1}
+.btn{background:var(--acc);color:#3a2a00;font-weight:900;border-radius:14px;padding:13px;font-size:15px;width:100%}
+.btn.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:#3a1f23;color:#ff9a9a;border:1px solid #5a2a30}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="logo">⚾ グングンやきゅうノート<small>GROWING NOTE</small></div>
+    <div class="spacer"></div>
+    <span id="modeBadge" class="badge">ローカル保存</span>
+    <button class="ibtn" id="adminBtn">管理者</button>
+  </div>
+
+  <!-- ================= ログイン ================= -->
+  <div id="loginView">
+    <div class="hero">
+      <h2>きみのカードをえらぼう！</h2>
+      <p>毎日の自主練を記録して、自分だけの選手を育てよう⚾🔥</p>
+    </div>
+    <div class="playerGrid" id="playerGrid"></div>
+  </div>
+
+  <!-- ================= アプリ本体 ================= -->
+  <div id="appView" class="hidden">
+    <div class="pbar">
+      <div class="ava" id="pbAva">🧒</div>
+      <div>
+        <div class="nm" id="pbName">せんしゅ</div>
+        <div class="lvrow">
+          <span class="lvchip" id="pbLv">Lv.1</span>
+          <span class="expbar"><i id="pbExp" style="width:0%"></i></span>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <button class="ibtn" id="switchBtn">えらび直す</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab on" data-tab="input">📝 きょうの練習</button>
+      <button class="tab" data-tab="card">🃏 マイカード</button>
+    </div>
+
+    <!-- 入力タブ -->
+    <div id="tab-input">
+      <div class="dateRow">
+        <span class="muted">記録する日：</span>
+        <input type="date" id="logDate">
+      </div>
+      <div id="missionBox"></div>
+      <div id="actList"></div>
+      <p class="muted" style="text-align:center">タップした分はすぐに保存されます。へらしたいときは「−」ボタン。</p>
+    </div>
+
+    <!-- カードタブ -->
+    <div id="tab-card" class="hidden"></div>
+  </div>
+
+  <!-- ================= 管理者 ================= -->
+  <div id="adminView" class="hidden">
+    <div class="card">
+      <h3>👨‍🏫 管理者メニュー</h3>
+      <div class="row2" style="margin-bottom:10px">
+        <button class="btn ghost" id="admExport">CSVダウンロード</button>
+        <button class="btn ghost" id="admBack">もどる</button>
+      </div>
+      <p class="muted">列をタップすると並び替え。選手名をタップで個人カードを表示。</p>
+    </div>
+    <div class="card">
+      <h3>🏆 ランキング・一覧</h3>
+      <div class="scroller">
+        <table id="admTable"></table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="celebrate"></div>
+<div id="modalRoot"></div>
+
+<script type="module">
+/* =========================== 設定 =========================== */
+const LS_FB = 'bb_fbconfig_v1';
+const LS_FB_OFF = 'bb_fb_disabled';
+const LS_LOCAL = 'bb_local_v1';
+const LS_LASTPID = 'bb_last_pid';
+const LS_UNLOCKED = 'bb_unlocked_v1';   // この端末でPIN解除ずみの選手ID
+
+// 園内・チーム共有の既定Firebase（apiKey等は公開情報のため埋め込み可）
+const EMBEDDED_FB_CONFIG = {
+  apiKey: "AIzaSyDTZVDpauFZlwF6hfPHl--B8ACU13eO45k",
+  authDomain: "pool-record.firebaseapp.com",
+  projectId: "pool-record",
+  storageBucket: "pool-record.firebasestorage.app",
+  messagingSenderId: "822991657774",
+  appId: "1:822991657774:web:1531290714eded7d4938bf"
+};
+const DEFAULT_ADMIN_PASS = "1111";
+
+// 練習メニュー：
+//  type='count' … 数/球数を ＋ボタンで入力（steps=ボタン, unit=単位）
+//  type='check' … 取り組んだら「やった！」でタップ記録（1日=1, unit='日'）
+//  par=育つパラメータ（1経験値あたりの伸び）
+const ACTS = [
+  {key:'swing',  label:'素振り',          icon:'🏏', type:'count', unit:'回', steps:[10,50,100], par:{meet:1.0, power:0.6}},
+  {key:'tee',    label:'ティーバッティング',icon:'⚾', type:'count', unit:'回', steps:[10,30,50],  par:{meet:1.2, power:1.0}},
+  {key:'field',  label:'守備練習',         icon:'🧤', type:'check', unit:'日',                    par:{field:1.4, arm:0.6}},
+  {key:'pitch',  label:'ピッチング',       icon:'🔥', type:'count', unit:'球', steps:[10,30,50],  par:{speed:1.0, control:0.9, stamina:0.6, arm:0.5}},
+  {key:'muscle', label:'筋トレ',           icon:'💪', type:'check', unit:'日',                    par:{power:1.2, run:0.9, stamina:0.7}},
+  {key:'stretch',label:'柔軟',             icon:'🤸', type:'check', unit:'日',                    par:{flex:1.6, run:0.3}},
+];
+// パワプロ風パラメータ
+const PARAMS = [
+  {key:'meet',   label:'ミート',     icon:'🎯'},
+  {key:'power',  label:'パワー',     icon:'💥'},
+  {key:'run',    label:'走力',       icon:'🏃'},
+  {key:'arm',    label:'肩力',       icon:'🦾'},
+  {key:'field',  label:'守備力',     icon:'🧤'},
+  {key:'speed',  label:'球速',       icon:'🚀'},
+  {key:'control',label:'コントロール',icon:'🎛️'},
+  {key:'stamina',label:'スタミナ',   icon:'🔋'},
+  {key:'flex',   label:'柔軟性',     icon:'🤸'},
+];
+// ランクしきい値（累積ポイント）G→S
+const RANKS = [
+  {r:'S',t:13000},{r:'A',t:8000},{r:'B',t:5000},{r:'C',t:3000},
+  {r:'D',t:1600},{r:'E',t:800},{r:'F',t:300},{r:'G',t:0},
+];
+// ===== 球団エンブレム風アイコン（オリジナルSVG・実在ロゴは不使用） =====
+const lg=(bg,ring,inner)=>`<svg viewBox="0 0 100 100" style="width:1em;height:1em;display:inline-block;vertical-align:middle"><circle cx="50" cy="50" r="46" fill="${bg}" stroke="${ring}" stroke-width="5"/>${inner}</svg>`;
+const gBall=`<circle cx="50" cy="51" r="22" fill="#fff"/><path d="M36 38 Q47 51 36 64" fill="none" stroke="#e23b3b" stroke-width="2.6" stroke-linecap="round"/><path d="M64 38 Q53 51 64 64" fill="none" stroke="#e23b3b" stroke-width="2.6" stroke-linecap="round"/>`;
+const gBats=`<rect x="46.8" y="25" width="6.4" height="40" rx="3.2" fill="#f3e2bd" transform="rotate(40 50 50)"/><rect x="46.8" y="25" width="6.4" height="40" rx="3.2" fill="#f3e2bd" transform="rotate(-40 50 50)"/><circle cx="50" cy="50" r="11" fill="#fff"/><path d="M42 44 Q50 50 42 56" fill="none" stroke="#e23b3b" stroke-width="1.8"/>`;
+const gCap=`<path d="M27 55 A23 21 0 0 1 73 55 Z" fill="#fff"/><path d="M69 55 q16 1 18 9 H64 Z" fill="#d7e1ee"/><circle cx="50" cy="35" r="3.4" fill="#1b3a63"/><path d="M40 52 h20" stroke="#1b3a63" stroke-width="2.4"/><path d="M50 36 v15" stroke="#1b3a63" stroke-width="2.4"/>`;
+const gStar=`<path d="M50 25 l7.3 16.5 18 1.4 -13.7 11.7 4.4 17.5 -16-9.6 -16 9.6 4.4-17.5 -13.7-11.7 18-1.4 z" fill="#ffd23f" stroke="#fff" stroke-width="1.4"/>`;
+const gBolt=`<path d="M56 23 L33 55 H47 L43 79 L69 43 H54 Z" fill="#ffd23f" stroke="#fff" stroke-width="1.6"/>`;
+const gFlame=`<path d="M50 23 C59 36 67 40 64 55 a14.5 14.5 0 1 1 -28 0 C34 45 42 45 44 34 C49 41 47 47 50 47 C53 45 52 34 50 23 Z" fill="#ff7a2f"/><circle cx="50" cy="59" r="7.5" fill="#ffe14d"/>`;
+const gCrown=`<path d="M29 65 L25 37 L40 50 L50 31 L60 50 L75 37 L71 65 Z" fill="#ffd23f" stroke="#fff" stroke-width="1.4"/><rect x="29" y="65" width="42" height="6" rx="2" fill="#ffd23f"/>`;
+const gField=`<rect x="31" y="31" width="38" height="38" rx="4" fill="#3fb56a" transform="rotate(45 50 50)"/><circle cx="50" cy="49" r="6" fill="#caa46a"/><path d="M45 64 h10 l-2 5 h-6 z" fill="#fff"/>`;
+const gB=`<text x="50" y="52" font-size="46" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#fff" font-family="Arial,sans-serif">B</text>`;
+const gEagle=`<path d="M50 39 L75 29 Q59 44 65 57 Q55 49 50 57 Q45 49 35 57 Q41 44 25 29 Z" fill="#fff"/><circle cx="50" cy="37" r="3.6" fill="#ffd23f"/>`;
+const gHelmet=`<path d="M27 53 A23 22 0 0 1 73 53 Z" fill="#fff"/><path d="M27 53 H51 V67 A11 11 0 0 1 27 61 Z" fill="#edf1f6"/><rect x="25" y="51" width="50" height="5" rx="2.5" fill="#dfe7f0"/>`;
+const gPennant=`<rect x="33" y="27" width="3.6" height="46" rx="1.8" fill="#fff"/><path d="M36.6 29 L71 39 L36.6 49 Z" fill="#fff"/><circle cx="49" cy="39" r="3.4" fill="#e0531f"/>`;
+const gK=`<text x="50" y="52" font-size="46" font-weight="900" text-anchor="middle" dominant-baseline="central" fill="#fff" font-family="Arial,sans-serif">K</text>`;
+const gStripes=`<g stroke="#ffffff" stroke-width="2.4" opacity="0.85"><line x1="38" y1="29" x2="38" y2="71"/><line x1="46" y1="27" x2="46" y2="73"/><line x1="54" y1="27" x2="54" y2="73"/><line x1="62" y1="29" x2="62" y2="71"/></g><path d="M50 41 l2.6 5.9 6.4 0.5 -4.9 4.2 1.6 6.3 -5.7 -3.5 -5.7 3.5 1.6 -6.3 -4.9 -4.2 6.4 -0.5 z" fill="#ffd23f"/>`;
+const gWings=`<path d="M50 41 Q34 35 22 43 Q36 45 34 53 Q44 47 50 53 Q56 47 66 53 Q64 45 78 43 Q66 35 50 41 Z" fill="#fff"/><circle cx="50" cy="57" r="9" fill="#fff"/><path d="M45 52 Q50 57 45 62" stroke="#e23b3b" stroke-width="1.6" fill="none"/>`;
+const gLaurel=`<path d="M33 40 Q25 52 35 66" fill="none" stroke="#7bd88f" stroke-width="3" stroke-linecap="round"/><path d="M67 40 Q75 52 65 66" fill="none" stroke="#7bd88f" stroke-width="3" stroke-linecap="round"/><circle cx="50" cy="51" r="13" fill="#fff"/><path d="M43 44 Q50 51 43 58" stroke="#e23b3b" stroke-width="1.8" fill="none"/>`;
+const gComet=`<path d="M30 64 L58 38" stroke="#ffd23f" stroke-width="4" stroke-linecap="round"/><path d="M37 65 L60 41" stroke="#ff7a2f" stroke-width="3" stroke-linecap="round" opacity="0.85"/><circle cx="62" cy="39" r="9" fill="#fff"/>`;
+const gShield=`<path d="M50 26 L72 33 V52 Q72 66 50 74 Q28 66 28 52 V33 Z" fill="#fff"/><path d="M50 38 l2.8 6.4 7 0.5 -5.3 4.6 1.7 6.8 -6.2 -3.8 -6.2 3.8 1.7 -6.8 -5.3 -4.6 7 -0.5 z" fill="#c0392b"/>`;
+const LOGOS = {
+  ball_navy:    lg('#15457a','#0a2a4d', gBall),
+  bats_red:     lg('#c0392b','#7d2018', gBats),
+  cap_green:    lg('#1e7a4d','#0d3d27', gCap),
+  star_blue:    lg('#1d63c4','#0b3a7a', gStar),
+  flame_orange: lg('#e0531f','#8a2d0c', gFlame),
+  bolt_purple:  lg('#6b3fa0','#3c2160', gBolt),
+  crown_black:  lg('#1c2330','#05080d', gCrown),
+  field_teal:   lg('#0f7d82','#063d40', gField),
+  letter_crimson:lg('#9e1b32','#5c0e1d', gB),
+  eagle_sky:    lg('#2a7fb8','#134a6e', gEagle),
+  bats_gold:    lg('#caa12a','#7d6113', gBats),
+  ball_black:   lg('#222a38','#05080d', gBall),
+  helmet_orange:lg('#d9531e','#883109', gHelmet),
+  pennant_red:  lg('#b5273a','#6e1623', gPennant),
+  k_navy:       lg('#173a6b','#0a2444', gK),
+  stripes_blue: lg('#16407a','#0a2a55', gStripes),
+  wings_maroon: lg('#7a2233','#48121d', gWings),
+  laurel_green: lg('#1d6e46','#0d3a25', gLaurel),
+  comet_indigo: lg('#3a3f8f','#1f2255', gComet),
+  shield_navy:  lg('#15457a','#0a2a4d', gShield),
+  star_teal:    lg('#0f7d82','#063d40', gStar),
+};
+const AVATARS = Object.keys(LOGOS);
+const DEFAULT_AVA = 'ball_navy';
+function avaHTML(ava){ return LOGOS[ava] || `<span style="font-size:1em">${esc(ava||'⚾')}</span>`; }
+
+/* =========================== 状態 =========================== */
+let players = [];          // [{id,name,ava}]
+let logs = {};             // { pid: { 'YYYY-MM-DD': {swing,tee,field,pitch,muscle,stretch,memo} } }
+let adminPass = DEFAULT_ADMIN_PASS;
+let curPid = null;
+let curDate = todayStr();
+let cloud = null;
+let admSort = {key:'level', dir:-1};
+let adminUnlocked = false;   // 管理者ログイン中はマスターキーとして全選手を開ける
+
+// ===== PINロック（この端末で解除した選手を記憶）=====
+function getUnlocked(){ try{ return JSON.parse(localStorage.getItem(LS_UNLOCKED)||'[]'); }catch(e){ return []; } }
+function isUnlocked(pid){ return adminUnlocked || getUnlocked().includes(pid); }
+function addUnlock(pid){ const u=getUnlocked(); if(!u.includes(pid)){ u.push(pid); localStorage.setItem(LS_UNLOCKED, JSON.stringify(u)); } }
+
+const el = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function todayStr(d=new Date()){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+/* =========================== 計算（育成ロジック） =========================== */
+// 経験値への換算：count型は1単位あたり、check型は「やった1日」あたり
+const UNIT_EXP = {swing:0.6, tee:1.2, pitch:1.5, field:120, muscle:110, stretch:80};
+
+function computeStats(pid){
+  const ds = logs[pid] || {};
+  const par = {}; PARAMS.forEach(p=>par[p.key]=0);
+  const tot = {}; ACTS.forEach(a=>tot[a.key]=0);
+  let totalExp = 0, activeDays = 0;
+  const dates = Object.keys(ds).sort();
+  for(const dk of dates){
+    const rec = ds[dk]; let dayHas=false;
+    for(const a of ACTS){
+      const v = Number(rec[a.key])||0;
+      if(v>0){ dayHas=true; tot[a.key]+=v;
+        const exp = v*UNIT_EXP[a.key];
+        totalExp += exp;
+        for(const k in a.par){ par[k] += exp*a.par[k]; }
+      }
+    }
+    if(dayHas) activeDays++;
+  }
+  // レベル：累積経験値ベース
+  const level = Math.max(1, Math.floor(Math.sqrt(totalExp/120))+1);
+  const curBase = Math.pow(level-1,2)*120, nextBase = Math.pow(level,2)*120;
+  const expPct = Math.min(100, Math.round((totalExp-curBase)/(nextBase-curBase)*100));
+  // ランク
+  const ranks = {}; for(const p of PARAMS){ ranks[p.key]=rankOf(par[p.key]); }
+  // 連続日数
+  const streak = calcStreak(ds);
+  return {par, ranks, tot, totalExp:Math.round(totalExp), level, expPct, activeDays, streak,
+          datesCount:dates.length, lastDate:dates[dates.length-1]||null};
+}
+function rankOf(v){ for(const x of RANKS){ if(v>=x.t) return x.r; } return 'G'; }
+function rankPct(v){ // バー表示用（次ランクまでの割合 + 基礎）
+  for(let i=0;i<RANKS.length;i++){
+    if(v>=RANKS[i].t){
+      const hi = i===0 ? RANKS[0].t*1.6 : RANKS[i-1].t;
+      const lo = RANKS[i].t;
+      const within = (v-lo)/(hi-lo);
+      const base = (RANKS.length-1-i)/(RANKS.length-1);
+      return Math.min(100, Math.round((base + within*(1/(RANKS.length-1)))*100));
+    }
+  }
+  return 0;
+}
+function calcStreak(ds){
+  let s=0; const d=new Date();
+  // 今日 or 昨日から連続で記録がある日を数える
+  let cur = new Date();
+  if(!hasRecord(ds,todayStr(cur))){ cur.setDate(cur.getDate()-1); if(!hasRecord(ds,todayStr(cur))) return 0; }
+  while(hasRecord(ds,todayStr(cur))){ s++; cur.setDate(cur.getDate()-1); }
+  return s;
+}
+function hasRecord(ds,dk){ const r=ds[dk]; if(!r) return false; return ACTS.some(a=>(Number(r[a.key])||0)>0); }
+
+// バッジ定義
+const BADGES = [
+  {id:'first', icon:'🌱', name:'はじめの一歩', test:s=>s.activeDays>=1},
+  {id:'week',  icon:'🔥', name:'7日れんぞく',  test:s=>s.streak>=7},
+  {id:'month', icon:'⚡', name:'30日れんぞく', test:s=>s.streak>=30},
+  {id:'swing1k',icon:'🏏',name:'素振り1000', test:(s,t)=>t.swing>=1000},
+  {id:'pitch1k',icon:'🔥',name:'1000球とうきゅう',test:(s,t)=>t.pitch>=1000},
+  {id:'lv10',  icon:'🌟', name:'レベル10',    test:s=>s.level>=10},
+  {id:'lv20',  icon:'👑', name:'レベル20',    test:s=>s.level>=20},
+  {id:'allround',icon:'🏅',name:'オールB以上',test:s=>PARAMS.every(p=>'SAB'.includes(s.ranks[p.key]))},
+];
+// きょうのミッション（その日の記録から判定・毎日リセット）
+const MISSIONS = [
+  {id:'bat', icon:'⚾', label:'バットを ふろう', sub:'素振り＋ティー で 50回', goal:50, cur:r=>(Number(r.swing)||0)+(Number(r.tee)||0)},
+  {id:'body',icon:'💪', label:'からだづくり',   sub:'守備・筋トレ・柔軟 から 1つ', goal:1, cur:r=>(r.field?1:0)+(r.muscle?1:0)+(r.stretch?1:0)},
+  {id:'all', icon:'🔥', label:'いろいろ やろう', sub:'メニューを 3しゅるい', goal:3, cur:r=>ACTS.filter(a=>(Number(r[a.key])||0)>0).length},
+];
+function computeMissions(rec){
+  rec=rec||{};
+  const list=MISSIONS.map(m=>{ const cur=m.cur(rec); return {...m, cur, done:cur>=m.goal}; });
+  return {list, allDone:list.every(x=>x.done)};
+}
+function earnedBadgeIds(s){ return BADGES.filter(b=>b.test(s,s.tot)).map(b=>b.id); }
+
+/* =========================== Firebase =========================== */
+function parseFB(text){
+  let t=(text||'').trim(); const i=t.indexOf('{'),j=t.lastIndexOf('}');
+  if(i<0||j<0) throw new Error('{ } が見つかりません'); t=t.slice(i,j+1);
+  try{ return JSON.parse(t);}catch(e){}
+  return JSON.parse(t.replace(/([{,]\s*)([A-Za-z0-9_$]+)\s*:/g,'$1"$2":').replace(/'/g,'"').replace(/,(\s*[}\]])/g,'$1'));
+}
+async function connectCloud(cfg){
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+  const fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+  const app=initializeApp(cfg); const db=fs.getFirestore(app);
+  const masterDoc=fs.doc(db,'baseball_master','main');
+  const logsCol=fs.collection(db,'baseball_logs');
+  fs.onSnapshot(masterDoc, ds=>{
+    const d=ds.data();
+    if(d){ if(Array.isArray(d.players)) players=d.players; if(d.adminPass) adminPass=d.adminPass; }
+    saveLocalMirror(); renderAll();
+  });
+  fs.onSnapshot(logsCol, snap=>{
+    snap.docChanges().forEach(ch=>{
+      if(ch.type==='removed') delete logs[ch.doc.id];
+      else logs[ch.doc.id] = ch.doc.data().dates || {};
+    });
+    saveLocalMirror(); renderAll();
+  });
+  return {
+    async saveMaster(){ await fs.setDoc(masterDoc,{players,adminPass}); },
+    async saveLog(pid){ await fs.setDoc(fs.doc(db,'baseball_logs',pid),{dates:logs[pid]||{}}); },
+    async delLog(pid){ await fs.deleteDoc(fs.doc(db,'baseball_logs',pid)); },
+  };
+}
+async function initCloud(){
+  if(localStorage.getItem(LS_FB_OFF)==='1'){ setBadge(false); return; }
+  let cfg=EMBEDDED_FB_CONFIG; const raw=localStorage.getItem(LS_FB);
+  if(raw){ try{ cfg=JSON.parse(raw);}catch(e){} }
+  try{ cloud=await connectCloud(cfg); setBadge(true); }
+  catch(e){ console.error(e); cloud=null; setBadge(false); toast('クラウド接続できず・ローカル保存で動作'); }
+}
+function setBadge(c){ const b=el('modeBadge'); b.textContent=c?'クラウド共有中':'ローカル保存'; b.classList.toggle('cloud',c); }
+
+/* =========================== 保存 =========================== */
+function saveLocalMirror(){ try{ localStorage.setItem(LS_LOCAL, JSON.stringify({players,logs,adminPass})); }catch(e){} }
+function loadLocal(){
+  try{ const d=JSON.parse(localStorage.getItem(LS_LOCAL)||'{}');
+    if(Array.isArray(d.players)) players=d.players;
+    if(d.logs) logs=d.logs;
+    if(d.adminPass) adminPass=d.adminPass;
+  }catch(e){}
+}
+let _logTimer=null, _pendingLog=null;
+function persistMaster(){ saveLocalMirror(); if(cloud) cloud.saveMaster().catch(e=>console.error(e)); }
+function persistLog(pid){
+  saveLocalMirror(); _pendingLog=pid;
+  clearTimeout(_logTimer);
+  _logTimer=setTimeout(()=>{ if(cloud&&_pendingLog) cloud.saveLog(_pendingLog).catch(e=>console.error(e)); _pendingLog=null; },700);
+}
+
+/* =========================== 入力操作 =========================== */
+function ensureRec(pid,dk){ logs[pid]=logs[pid]||{}; logs[pid][dk]=logs[pid][dk]||{}; return logs[pid][dk]; }
+function bump(actKey, delta){
+  const rec = ensureRec(curPid,curDate);
+  const before = progressSnapshot();
+  let v = (Number(rec[actKey])||0) + delta; if(v<0) v=0;
+  rec[actKey]=v;
+  persistLog(curPid);
+  renderAll();
+  if(delta>0){ floatGain(actKey, '+'+delta); celebrateAfter(before, actKey, encourage(actKey)); }
+}
+function toggleCheck(actKey){
+  const rec=ensureRec(curPid,curDate);
+  const before = progressSnapshot();
+  const on = !(Number(rec[actKey])||0);
+  rec[actKey] = on ? 1 : 0;
+  persistLog(curPid); renderAll();
+  if(on){ floatGain(actKey, 'OK!'); celebrateAfter(before, actKey, `${actLabel(actKey)} できたね！えらい！🙆`); }
+}
+function actLabel(k){ return (ACTS.find(a=>a.key===k)||{}).label||''; }
+
+/* =========================== おたのしみ演出 =========================== */
+// 変化前の状態（レベル・取得バッジ・ミッション達成）を記録
+function progressSnapshot(){
+  const s=computeStats(curPid);
+  const rec=(logs[curPid]&&logs[curPid][curDate])||{};
+  return {level:s.level, badges:new Set(earnedBadgeIds(s)), missionsAllDone:computeMissions(rec).allDone};
+}
+// 変化後に、レベルアップ＞バッジ＞ミッション全クリア＞応援トースト の優先で演出
+function celebrateAfter(before, actKey, gainMsg){
+  const s=computeStats(curPid);
+  const newBadgeId=earnedBadgeIds(s).find(id=>!before.badges.has(id));
+  const rec=(logs[curPid]&&logs[curPid][curDate])||{};
+  const allDone=computeMissions(rec).allDone;
+  if(s.level>before.level){ bigCelebrate('⚾ レベルアップ！', `Lv.${s.level}　ホームラン級のがんばり！`); }
+  else if(newBadgeId){ const bd=BADGES.find(x=>x.id===newBadgeId); bigCelebrate('🏅 バッジ ゲット！', bd?bd.name:''); }
+  else if(allDone && !before.missionsAllDone){ bigCelebrate('🎉 ミッション クリア！', 'きょうのミッション ぜんぶ たっせい！'); }
+  else if(gainMsg){ toast(gainMsg); }
+}
+// 野球テイストの応援メッセージ
+const CHEER={
+  swing:['ナイスバッティング！⚾','いい音だ！🎵','フルスイング！💪','その調子！🔥'],
+  tee:['ナイスバッティング！⚾','ミート うまい！🎯','いいスイング！💪','ナイス！✨'],
+  pitch:['ナイスピッチ！⚾','ストライク！🎯','いい球いってる！🔥','ナイスコントロール！👍'],
+  field:['ナイスフィールディング！🧤','うまくなってる！✨','ナイス！💪'],
+  muscle:['パワーアップ！💥','つよくなってる！💪','ナイス トレーニング！🔥'],
+  stretch:['やわらかくなってる！🤸','ケガしにくい体に！✨','ナイス！👍'],
+};
+function encourage(actKey){ const a=CHEER[actKey]||['ナイス練習！💪']; return a[Math.floor(Math.random()*a.length)]; }
+// タップした数字をポップ＋「＋N」を浮かせる
+function floatGain(actKey, text){
+  const numEl=document.getElementById('now-'+actKey);
+  if(!numEl) return;
+  numEl.classList.remove('numpop'); void numEl.offsetWidth; numEl.classList.add('numpop');
+  const r=numEl.getBoundingClientRect();
+  const f=document.createElement('div'); f.className='floater'; f.textContent=text;
+  f.style.left=(r.left+r.width/2-14)+'px'; f.style.top=(r.top-6)+'px';
+  document.body.appendChild(f); setTimeout(()=>f.remove(),1000);
+}
+// 紙吹雪＋バナー
+function bigCelebrate(title, sub){
+  const c=el('celebrate'); if(!c) return;
+  c.innerHTML=`<div class="celebanner"><div class="ttl">${esc(title)}</div><div class="sub">${esc(sub)}</div></div>`;
+  const emo=['⚾','⭐','🎉','🔥','🏆','✨'];
+  for(let i=0;i<28;i++){
+    const s=document.createElement('div'); s.className='cfetti';
+    s.textContent=emo[i%emo.length];
+    s.style.left=Math.random()*100+'%';
+    s.style.animationDuration=(1.1+Math.random()*1.2)+'s';
+    s.style.animationDelay=(Math.random()*0.3)+'s';
+    s.style.fontSize=(16+Math.random()*18)+'px';
+    c.appendChild(s);
+  }
+  clearTimeout(bigCelebrate._t);
+  bigCelebrate._t=setTimeout(()=>{ c.innerHTML=''; }, 2300);
+}
+function renderMissions(){
+  const box=el('missionBox'); if(!box) return;
+  const rec=(logs[curPid]&&logs[curPid][curDate])||{};
+  const {list,allDone}=computeMissions(rec);
+  let h=`<div class="mission"><h3>🎯 きょうのミッション</h3>`;
+  for(const m of list){
+    const pct=Math.min(100,Math.round(m.cur/m.goal*100));
+    h+=`<div class="mrow ${m.done?'done':''}">
+      <span class="mic">${m.icon}</span>
+      <span class="mlb">${m.label}<small>${m.sub}（${Math.min(m.cur,m.goal)}/${m.goal}）</small></span>
+      <span class="mtrack"><i style="width:${pct}%"></i></span>
+      <span class="mck">${m.done?'✅':'⬜'}</span>
+    </div>`;
+  }
+  if(allDone) h+=`<div class="mclear">🎉 ぜんぶ クリア！ すごい！</div>`;
+  box.innerHTML=h+`</div>`;
+}
+function setMemo(v){ ensureRec(curPid,curDate).memo=v; persistLog(curPid); }
+
+/* =========================== 描画 =========================== */
+let _lastStats=null;
+function renderAll(){
+  if(el('loginView') && !el('loginView').classList.contains('hidden')) renderPlayerGrid();
+  if(el('appView') && !el('appView').classList.contains('hidden')) renderApp();
+  if(el('adminView') && !el('adminView').classList.contains('hidden')) renderAdmin();
+}
+
+function renderPlayerGrid(){
+  const g=el('playerGrid');
+  const cards = players.map(p=>{
+    const s=computeStats(p.id);
+    const locked = p.pin && !isUnlocked(p.id);
+    return `<button class="pcard" data-pid="${p.id}">
+      <div class="ava">${avaHTML(p.ava)}</div>
+      <div class="nm">${locked?'🔒 ':''}${esc(p.name)}</div>
+      <div class="lv">Lv.${s.level}　${s.streak>0?'🔥'+s.streak:'　'}</div>
+    </button>`;
+  }).join('');
+  g.innerHTML = cards + `<button class="pcard add" id="addPlayer"><div class="ava">＋</div><div>選手をふやす</div></button>`;
+  g.querySelectorAll('.pcard[data-pid]').forEach(b=> b.onclick=()=>openPlayer(b.dataset.pid));
+  el('addPlayer').onclick=openAddPlayer;
+}
+
+function openPlayer(pid){
+  const p=players.find(x=>x.id===pid); if(!p) return;
+  if(p.pin && !isUnlocked(pid)){ promptPin(p); return; }
+  doOpenPlayer(pid);
+}
+function doOpenPlayer(pid){
+  curPid=pid; localStorage.setItem(LS_LASTPID,pid); curDate=todayStr();
+  el('loginView').classList.add('hidden');
+  el('adminView').classList.add('hidden');
+  el('appView').classList.remove('hidden');
+  el('logDate').value=curDate;
+  switchTab('input');
+  renderApp();
+}
+// PIN入力（正しいPIN または 管理者パスワードで解除）
+function promptPin(p){
+  modal(`<h3>🔒 ${esc(p.name)} のロック</h3>
+    <p class="muted" style="margin:-4px 0 10px">あんしょう番号（4けた）を入れてね</p>
+    <input id="pkPin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" style="font-size:24px;text-align:center;letter-spacing:10px">
+    <div class="row2"><button class="btn ghost" id="pkCancel">やめる</button><button class="btn" id="pkOk">ひらく</button></div>
+    <p class="muted" style="margin-top:8px">わからないときは管理者パスワードでもOK</p>`);
+  const tryOpen=()=>{
+    const v=el('pkPin').value.trim();
+    if(v===p.pin || v===adminPass){ addUnlock(p.id); closeModal(); doOpenPlayer(p.id); }
+    else { toast('あんしょう番号がちがうよ'); el('pkPin').value=''; el('pkPin').focus(); }
+  };
+  el('pkCancel').onclick=()=>{ closeModal(); goLogin(); };
+  el('pkOk').onclick=tryOpen;
+  el('pkPin').focus();
+  el('pkPin').onkeydown=e=>{ if(e.key==='Enter') tryOpen(); };
+}
+
+function renderApp(){
+  const p=players.find(x=>x.id===curPid); if(!p){ goLogin(); return; }
+  const s=computeStats(curPid); _lastStats=s;
+  el('pbAva').innerHTML=avaHTML(p.ava);
+  el('pbName').textContent=p.name;
+  el('pbLv').textContent='Lv.'+s.level;
+  el('pbExp').style.width=s.expPct+'%';
+  renderMissions();
+  renderActs();
+  if(!el('tab-card').classList.contains('hidden')) renderCard();
+}
+
+function renderActs(){
+  const rec=(logs[curPid]&&logs[curPid][curDate])||{};
+  el('actList').innerHTML = ACTS.map(a=>{
+    const v=Number(rec[a.key])||0;
+    if(a.type==='check'){
+      const done=v>0;
+      return `<div class="act ${done?'done':''}">
+        <div class="head">
+          <span class="icon">${a.icon}</span>
+          <div><div class="ttl">${a.label}</div><div class="muted">きょう</div></div>
+          <div class="now"><b id="now-${a.key}">${done?'✅':'—'}</b></div>
+        </div>
+        <button class="bigcheck" data-check="${a.key}">${done?'やった！ ✅（もう一回タップで取り消し）':'やったら ここをタップ！👆'}</button>
+      </div>`;
+    }
+    const steps = a.steps.map(n=>`<button class="step" data-act="${a.key}" data-d="${n}">+${n}</button>`).join('');
+    return `<div class="act">
+      <div class="head">
+        <span class="icon">${a.icon}</span>
+        <div><div class="ttl">${a.label}</div><div class="muted">きょう</div></div>
+        <div class="now"><b id="now-${a.key}">${v}</b><span>${a.unit}</span></div>
+      </div>
+      <div class="steps">
+        <button class="step minus" data-act="${a.key}" data-d="-${a.steps[0]}">−${a.steps[0]}</button>
+        ${steps}
+      </div>
+    </div>`;
+  }).join('') + `<div class="act"><div class="head"><span class="icon">✏️</span><div class="ttl">きょうのメモ</div></div>
+      <textarea class="memo" id="memoBox" rows="2" placeholder="きょう がんばったこと・気づいたこと（自由）">${esc(rec.memo||'')}</textarea></div>`;
+  el('actList').querySelectorAll('.step').forEach(b=> b.onclick=()=>bump(b.dataset.act, Number(b.dataset.d)));
+  el('actList').querySelectorAll('.bigcheck').forEach(b=> b.onclick=()=>toggleCheck(b.dataset.check));
+  const mb=el('memoBox'); if(mb) mb.oninput=()=>setMemo(mb.value);
+}
+
+function renderCard(){
+  const p=players.find(x=>x.id===curPid); const s=computeStats(curPid);
+  const overall = overallRank(s);
+  const paramRows = PARAMS.map(pr=>{
+    const r=s.ranks[pr.key], pct=rankPct(s.par[pr.key]);
+    return `<div class="prow">
+      <span class="pl">${pr.icon} ${pr.label}</span>
+      <span class="track"><i class="bar-${r}" style="width:${pct}%"></i></span>
+      <span class="rk rk-${r}">${r}</span>
+    </div>`;
+  }).join('');
+  const tots = ACTS.map(a=>`<div class="t"><span class="ic">${a.icon}</span><span>${a.label}</span><span class="v">${s.tot[a.key]}${a.unit}</span></div>`).join('');
+  const badges = BADGES.map(b=>{
+    const on=b.test(s,s.tot); return `<span class="bdg ${on?'':'off'}">${b.icon} ${b.name}</span>`;
+  }).join('');
+  el('tab-card').innerHTML=`
+    <div class="card statcard">
+      <div class="sc-top">
+        <span class="ava">${avaHTML(p.ava)}</span>
+        <div><div class="nm">${esc(p.name)}</div><div class="muted">Lv.${s.level}・通算${s.totalExp.toLocaleString()}EXP</div></div>
+        <div class="sc-rank"><div class="big rk-${overall}">${overall}</div><small>総合ランク</small></div>
+      </div>
+      <div class="params">${paramRows}</div>
+    </div>
+    <div class="card">
+      <div class="statbig">
+        <div class="b"><b>${s.streak}</b><span>連続日数 🔥</span></div>
+        <div class="b"><b>${s.activeDays}</b><span>練習した日</span></div>
+        <div class="b"><b>${s.level}</b><span>レベル</span></div>
+      </div>
+    </div>
+    <div class="card"><h3>🏅 バッジ</h3><div class="badges">${badges}</div></div>
+    <div class="card"><h3>📊 通算記録</h3><div class="totlist">${tots}</div></div>
+    <div class="card"><h3>🗓️ さいきん4週間</h3>${heatmap(curPid)}<p class="muted" style="margin-top:8px">色がこいほど たくさん練習した日</p></div>
+  `;
+}
+function overallRank(s){
+  const order='GFEDCBAS';
+  const avg = PARAMS.reduce((a,p)=>a+order.indexOf(s.ranks[p.key]),0)/PARAMS.length;
+  return order[Math.round(avg)]||'G';
+}
+function heatmap(pid){
+  const ds=logs[pid]||{};
+  const today=new Date(); const cells=[];
+  // 直近28日（週ごと）
+  for(let w=3;w>=0;w--){
+    let row='<div class="wk">';
+    for(let d=0;d<7;d++){
+      const dt=new Date(today); dt.setDate(today.getDate()-(w*7+(6-d)));
+      const dk=todayStr(dt); const rec=ds[dk]||{};
+      const exp=ACTS.reduce((a,act)=>a+(Number(rec[act.key])||0)*UNIT_EXP[act.key],0);
+      let lv=''; if(exp>0)lv='l1'; if(exp>=60)lv='l2'; if(exp>=150)lv='l3'; if(exp>=300)lv='l4';
+      row+=`<div class="d ${lv}" title="${dk}"></div>`;
+    }
+    cells.push(row+'</div>');
+  }
+  return `<div class="heat">${cells.join('')}</div>`;
+}
+
+/* =========================== タブ =========================== */
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name));
+  el('tab-input').classList.toggle('hidden',name!=='input');
+  el('tab-card').classList.toggle('hidden',name!=='card');
+  if(name==='card') renderCard();
+}
+document.querySelectorAll('.tab').forEach(t=> t.onclick=()=>switchTab(t.dataset.tab));
+
+/* =========================== 管理者 =========================== */
+function renderAdmin(){
+  const cols=[
+    {k:'name',l:'選手'},{k:'level',l:'Lv'},{k:'streak',l:'連続'},{k:'activeDays',l:'練習日'},
+    ...ACTS.map(a=>({k:a.key,l:a.icon,act:true})),
+    {k:'totalExp',l:'EXP'},
+    {k:'_del',l:'削除',nosort:true},
+  ];
+  const rows = players.map(p=>{
+    const s=computeStats(p.id);
+    return {p, s, name:p.name, level:s.level, streak:s.streak, activeDays:s.activeDays,
+      totalExp:s.totalExp, ...Object.fromEntries(ACTS.map(a=>[a.key,s.tot[a.key]]))};
+  });
+  rows.sort((a,b)=>{ const k=admSort.key; let va=a[k],vb=b[k];
+    if(typeof va==='string'){ return admSort.dir*va.localeCompare(vb,'ja'); }
+    return admSort.dir*((va||0)-(vb||0));
+  });
+  let h=`<thead><tr>${cols.map(c=>`<th data-k="${c.k}">${c.l}${admSort.key===c.k?(admSort.dir<0?' ▼':' ▲'):''}</th>`).join('')}</tr></thead><tbody>`;
+  rows.forEach((r,i)=>{
+    const medal = admSort.key==='level'||admSort.key==='totalExp' ? (i===0?'🥇':i===1?'🥈':i===2?'🥉':'') : '';
+    h+=`<tr><td class="nm"><button class="ibtn" style="padding:4px 8px;display:inline-flex;align-items:center;gap:5px" data-pid="${r.p.id}"><span style="font-size:18px">${avaHTML(r.p.ava)}</span> ${esc(r.name)} ${medal}</button></td>`;
+    h+=`<td>${r.level}</td><td>${r.streak}</td><td>${r.activeDays}</td>`;
+    ACTS.forEach(a=> h+=`<td>${r[a.key]}</td>`);
+    h+=`<td>${r.totalExp.toLocaleString()}</td>`;
+    h+=`<td><button class="delx" data-del="${r.p.id}" title="この選手を削除">🗑</button></td></tr>`;
+  });
+  h+='</tbody>';
+  const tbl=el('admTable'); tbl.innerHTML=h;
+  tbl.querySelectorAll('th').forEach(th=> th.onclick=()=>{ const k=th.dataset.k;
+    if(k==='_del') return;
+    if(admSort.key===k) admSort.dir*=-1; else { admSort.key=k; admSort.dir = k==='name'?1:-1; }
+    renderAdmin();
+  });
+  tbl.querySelectorAll('button[data-pid]').forEach(b=> b.onclick=()=>{
+    el('adminView').classList.add('hidden'); openPlayer(b.dataset.pid);
+  });
+  tbl.querySelectorAll('button[data-del]').forEach(b=> b.onclick=()=>{
+    if(deletePlayer(b.dataset.del)) renderAdmin();
+  });
+}
+function exportCSV(){
+  const head=['選手','レベル','連続日数','練習日数','総EXP',...ACTS.map(a=>a.label+'('+a.unit+')')];
+  const lines=[head.join(',')];
+  players.forEach(p=>{ const s=computeStats(p.id);
+    lines.push([p.name,s.level,s.streak,s.activeDays,s.totalExp,...ACTS.map(a=>s.tot[a.key])].join(','));
+  });
+  const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`自主練記録_${todayStr()}.csv`; a.click();
+}
+
+/* =========================== モーダル =========================== */
+function modal(html){
+  el('modalRoot').innerHTML=`<div class="modal" id="ovl"><div class="sheet">${html}</div></div>`;
+  el('ovl').onclick=e=>{ if(e.target.id==='ovl') closeModal(); };
+}
+function closeModal(){ el('modalRoot').innerHTML=''; }
+
+let _editEmoji=DEFAULT_AVA;
+function openAddPlayer(){
+  _editEmoji=DEFAULT_AVA;
+  modal(`<h3>選手をふやす</h3>
+    <input id="npName" placeholder="名前（ニックネームでもOK）" maxlength="12">
+    <div class="muted" style="margin-bottom:6px">エンブレムをえらぶ</div>
+    <div class="emojipick" id="npEmoji">${AVATARS.map(e=>`<button data-e="${e}" class="${e===DEFAULT_AVA?'on':''}">${avaHTML(e)}</button>`).join('')}</div>
+    <div class="muted" style="margin:2px 0 6px">🔒 あんしょう番号（4けた・にゅうりょく任意）</div>
+    <input id="npPin" type="password" inputmode="numeric" maxlength="4" placeholder="他の人に編集されたくない時に設定。空ならロックなし">
+    <div class="row2"><button class="btn ghost" id="npCancel">やめる</button><button class="btn" id="npOk">つくる</button></div>`);
+  el('npEmoji').querySelectorAll('button').forEach(b=> b.onclick=()=>{
+    el('npEmoji').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); _editEmoji=b.dataset.e;
+  });
+  el('npCancel').onclick=closeModal;
+  el('npOk').onclick=()=>{
+    const nm=el('npName').value.trim(); if(!nm){ el('npName').focus(); return; }
+    const pin=el('npPin').value.trim();
+    if(pin && !/^\d{4}$/.test(pin)){ toast('あんしょう番号は4けたの数字だよ'); el('npPin').focus(); return; }
+    const id='p'+Date.now().toString(36)+Math.floor(Math.random()*1000);
+    const player={id,name:nm,ava:_editEmoji};
+    if(pin){ player.pin=pin; addUnlock(id); }   // 作った端末は解除ずみに
+    players.push(player); persistMaster(); closeModal(); renderPlayerGrid();
+    toast(`${nm} のカードをつくったよ！`);
+  };
+}
+function openEditPlayer(){
+  const p=players.find(x=>x.id===curPid); if(!p) return; _editEmoji=p.ava||DEFAULT_AVA;
+  modal(`<h3>選手の設定</h3>
+    <input id="epName" value="${esc(p.name)}" maxlength="12">
+    <div class="muted" style="margin-bottom:6px">エンブレム</div>
+    <div class="emojipick" id="epEmoji">${AVATARS.map(e=>`<button data-e="${e}" class="${e===_editEmoji?'on':''}">${avaHTML(e)}</button>`).join('')}</div>
+    <div class="muted" style="margin:2px 0 6px">🔒 あんしょう番号（4けた・空にするとロック解除）</div>
+    <input id="epPin" type="text" inputmode="numeric" maxlength="4" value="${esc(p.pin||'')}" placeholder="未設定（ロックなし）">
+    <div class="row2" style="margin-bottom:10px"><button class="btn ghost" id="epCancel">やめる</button><button class="btn" id="epOk">ほぞん</button></div>
+    <button class="btn danger" id="epDel">この選手を削除</button>`);
+  el('epEmoji').querySelectorAll('button').forEach(b=> b.onclick=()=>{
+    el('epEmoji').querySelectorAll('button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); _editEmoji=b.dataset.e;
+  });
+  el('epCancel').onclick=closeModal;
+  el('epOk').onclick=()=>{
+    const nm=el('epName').value.trim();
+    const pin=el('epPin').value.trim();
+    if(pin && !/^\d{4}$/.test(pin)){ toast('あんしょう番号は4けたの数字だよ'); el('epPin').focus(); return; }
+    if(nm)p.name=nm; p.ava=_editEmoji;
+    if(pin){ p.pin=pin; addUnlock(p.id); } else { delete p.pin; }
+    persistMaster(); closeModal(); renderApp();
+  };
+  el('epDel').onclick=()=>{ if(deletePlayer(curPid)){ closeModal(); goLogin(); } };
+}
+// 選手を削除（記録も削除）。確認OKならtrue
+function deletePlayer(pid){
+  const p=players.find(x=>x.id===pid); if(!p) return false;
+  if(!confirm(`${p.name} を削除します。これまでの記録もすべて消えます。よろしいですか？`)) return false;
+  players=players.filter(x=>x.id!==pid); delete logs[pid];
+  persistMaster(); if(cloud) cloud.delLog(pid).catch(()=>{}); saveLocalMirror();
+  return true;
+}
+
+function openAdmin(){
+  modal(`<h3>👨‍🏫 管理者ログイン</h3>
+    <input id="apPass" type="password" placeholder="パスワード" inputmode="numeric">
+    <div class="row2"><button class="btn ghost" id="apCancel">やめる</button><button class="btn" id="apOk">入る</button></div>
+    <p class="muted" style="margin-top:8px">初期パスワード：1111（あとで変更できます）</p>`);
+  el('apCancel').onclick=closeModal;
+  el('apOk').onclick=()=>{
+    if(el('apPass').value!==adminPass){ toast('パスワードがちがいます'); return; }
+    adminUnlocked=true;   // 管理者中は全選手のマスターキー
+    closeModal();
+    el('loginView').classList.add('hidden'); el('appView').classList.add('hidden');
+    el('adminView').classList.remove('hidden'); renderAdmin();
+  };
+  el('apPass').focus();
+  el('apPass').onkeydown=e=>{ if(e.key==='Enter') el('apOk').click(); };
+}
+
+/* =========================== ナビ・トースト =========================== */
+function goLogin(){
+  adminUnlocked=false;   // ログイン画面に戻ったら管理者マスターキーを解除
+  el('appView').classList.add('hidden'); el('adminView').classList.add('hidden');
+  el('loginView').classList.remove('hidden'); renderPlayerGrid();
+}
+let _toastTimer;
+function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(_toastTimer); _toastTimer=setTimeout(()=>t.classList.remove('show'),1800); }
+
+el('switchBtn').onclick=goLogin;
+el('adminBtn').onclick=openAdmin;
+el('admBack').onclick=goLogin;
+el('admExport').onclick=exportCSV;
+el('logDate').onchange=()=>{ curDate=el('logDate').value||todayStr(); renderApp(); };
+// 選手バーの名前ダブルタップで編集
+el('pbName').ondblclick=openEditPlayer;
+el('pbAva').onclick=openEditPlayer;
+
+/* =========================== 起動 =========================== */
+(function start(){
+  loadLocal();
+  initCloud();
+  goLogin();
+})();
+</script>
+</body>
+</html>
