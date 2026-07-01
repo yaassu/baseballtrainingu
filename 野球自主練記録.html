@@ -208,10 +208,9 @@ td.nm{text-align:left;font-weight:800;white-space:nowrap}
 <div class="wrap">
 
   <div class="topbar">
-    <div class="logo">⚾ グングンやきゅうノート<small>GROWING NOTE</small></div>
+    <div class="logo" id="logoSecret" style="user-select:none;-webkit-user-select:none">⚾ グングンやきゅうノート<small>GROWING NOTE</small></div>
     <div class="spacer"></div>
     <span id="modeBadge" class="badge">ローカル保存</span>
-    <button class="ibtn" id="adminBtn">管理者</button>
   </div>
 
   <!-- ================= ログイン ================= -->
@@ -944,8 +943,20 @@ function toast(msg){ const t=el('toast'); t.textContent=msg; t.classList.add('sh
   clearTimeout(_toastTimer); _toastTimer=setTimeout(()=>t.classList.remove('show'),1800); }
 
 el('switchBtn').onclick=goLogin;
-el('adminBtn').onclick=openAdmin;
 el('admBack').onclick=goLogin;
+
+// 管理者への隠し入口：タイトルを長押し(約0.7秒) または 5回すばやくタップ（子どもには見せない）
+(function(){
+  const logo=el('logoSecret'); if(!logo) return;
+  let tapN=0, tapT=0, lpTimer=null;
+  const open=()=>{ tapN=0; openAdmin(); };
+  logo.addEventListener('click', ()=>{
+    const now=Date.now(); if(now-tapT>2500) tapN=0; tapT=now; tapN++;
+    if(tapN>=5) open();
+  });
+  logo.addEventListener('pointerdown', ()=>{ clearTimeout(lpTimer); lpTimer=setTimeout(open,700); });
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=> logo.addEventListener(ev, ()=>clearTimeout(lpTimer)));
+})();
 el('admExport').onclick=exportCSV;
 el('logDate').onchange=()=>{ curDate=el('logDate').value||todayStr(); renderApp(); };
 // 選手バーの名前ダブルタップで編集
